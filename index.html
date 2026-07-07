@@ -651,28 +651,14 @@
       <button class="btn" onclick="document.getElementById('fi-ent').click()"><i class="ti ti-upload"
           aria-hidden="true"></i> Importer CSV</button>
       <input type="file" id="fi-ent" class="file-input" accept=".csv" onchange="importEnts(this)">
-      <div class="search-inline">
-        <input id="ent-search-input" class="filter-select" type="text" placeholder="Nom entreprise"
-          onkeydown="if (event.key === 'Enter') searchAndHighlightEnt()">
-        <button class="btn" type="button" onclick="searchAndHighlightEnt()"><i class="ti ti-search"
-            aria-hidden="true"></i> Chercher</button>
-      </div>
-      <button class="btn" onclick="showCsvNote('ents')"><i class="ti ti-file-text" aria-hidden="true"></i> Format
-        CSV</button>
-      <button class="btn" onclick="openManualEntModal()"><i class="ti ti-plus" aria-hidden="true"></i> Ajouter</button>
-      <div class="filter-section">
-        <button class="btn" type="button" onclick="toggleMetierFilterPopover()"><i class="ti ti-filter"
-            aria-hidden="true"></i> Filtrer</button>
-        <div id="metier-filter-popover" class="filter-popover" role="dialog" aria-label="Filtre par métier">
-          <label class="filter-popover-label" for="metier-filter-select">Métier</label>
-          <select id="metier-filter-select" class="filter-select"
-            onchange="setActiveMetierFilter(this.value); closeMetierFilterPopover()">
-            <option value="all">Tous les métiers</option>
-          </select>
-        </div>
-      </div>
-      <button class="btn" onclick="openUnresolvedModal()"><i class="ti ti-map-pin-off" aria-hidden="true"></i> Adresses
-        non trouvées</button>
+      <select id="ent-actions-menu" class="filter-select"
+        onchange="handleEntAction(this.value); this.value = 'default';" style="min-width: 180px;">
+        <option value="default">Entreprises — Menu</option>
+        <option value="search">Chercher</option>
+        <option value="add">Ajouter</option>
+        <option value="filter">Filtrer par métier</option>
+        <option value="unresolved">Adresses non trouvées</option>
+      </select>
     </div>
     <div class="tb-section" style="border-right:none;margin-left:auto">
       <div id="geocode-bar" style="display:none;align-items:center;gap:8px;font-size:11px;color:var(--blue)">
@@ -769,6 +755,47 @@
         style="padding:0 10px;height:28px;font-size:12px">Fermer</button>
     </div>
     <div id="unresolved-list" class="bad-address-list"></div>
+  </div>
+</div>
+
+<div id="search-ent-modal" class="modal-backdrop" aria-hidden="true">
+  <div class="modal-card" onclick="event.stopPropagation()">
+    <div class="csv-note-header">
+      <strong>Chercher une entreprise</strong>
+      <button class="btn" type="button" onclick="closeSearchEntModal()"
+        style="padding:0 10px;height:28px;font-size:12px">Fermer</button>
+    </div>
+    <form id="search-ent-form" class="modal-form" onsubmit="submitSearchEnt(event)">
+      <label>
+        Nom de l'entreprise
+        <input id="ent-search-input" name="search" type="text" required placeholder="Saisissez le nom de l'entreprise">
+      </label>
+      <div class="modal-actions">
+        <button class="btn" type="button" onclick="closeSearchEntModal()">Annuler</button>
+        <button class="btn accent" type="submit">Chercher</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div id="filter-ent-modal" class="modal-backdrop" aria-hidden="true">
+  <div class="modal-card" onclick="event.stopPropagation()">
+    <div class="csv-note-header">
+      <strong>Filtrer par métier</strong>
+      <button class="btn" type="button" onclick="closeFilterEntModal()"
+        style="padding:0 10px;height:28px;font-size:12px">Fermer</button>
+    </div>
+    <div class="modal-form">
+      <label>
+        Métier
+        <select id="metier-filter-select" class="filter-select" onchange="setActiveMetierFilter(this.value)">
+          <option value="all">Tous les métiers</option>
+        </select>
+      </label>
+      <div class="modal-actions">
+        <button class="btn" type="button" onclick="closeFilterEntModal()">Fermer</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -1055,7 +1082,7 @@
     const percent = total ? Math.round((done / total) * 100) : 0;
     if (bar) bar.style.width = percent + '%';
     if (text) text.textContent = total ? `${done}/${total}` : '0/0';
-    if (msg && message) msg.textContent = message;
+    if (msg && message && !message.includes('Géocodage')) msg.textContent = message;
   }
 
   const GEO_CACHE_KEY = 'ent-geocode-cache-v1';
@@ -1138,7 +1165,7 @@
           if (c) { e.lat = c.lat; e.lng = c.lng; } else { e.err = true; err++; }
         }
         done += 1;
-        updateGeocodeProgress(done, total, `Géocodage ${done}/${total} — ${e.nom}`);
+        updateGeocodeProgress(done, total, `Géocodage ${done}/${total}`);
       }
     });
     await Promise.all(workers);
@@ -1589,6 +1616,56 @@
     setTimeout(() => t.classList.remove('show'), 3000);
   }
 
+  function handleEntAction(action) {
+    switch (action) {
+      case 'search':
+        openSearchEntModal();
+        break;
+      case 'add':
+        openManualEntModal();
+        break;
+      case 'filter':
+        openFilterEntModal();
+        break;
+      case 'unresolved':
+        openUnresolvedModal();
+        break;
+    }
+  }
+
+  function openSearchEntModal() {
+    const modal = document.getElementById('search-ent-modal');
+    const form = document.getElementById('search-ent-form');
+    form.reset();
+    modal.classList.add('open');
+    modal.setAttribute('aria-hidden', 'false');
+    document.getElementById('ent-search-input').focus();
+  }
+
+  function closeSearchEntModal() {
+    const modal = document.getElementById('search-ent-modal');
+    modal.classList.remove('open');
+    modal.setAttribute('aria-hidden', 'true');
+  }
+
+  function submitSearchEnt(ev) {
+    ev.preventDefault();
+    searchAndHighlightEnt();
+    closeSearchEntModal();
+  }
+
+  function openFilterEntModal() {
+    const modal = document.getElementById('filter-ent-modal');
+    modal.classList.add('open');
+    modal.setAttribute('aria-hidden', 'false');
+  }
+
+  function closeFilterEntModal() {
+    const modal = document.getElementById('filter-ent-modal');
+    modal.classList.remove('open');
+    modal.setAttribute('aria-hidden', 'true');
+  }
+
   window.addEventListener('DOMContentLoaded', () => {
     initMap();
     renderSidebar();
@@ -1596,5 +1673,7 @@
     renderMetierFilters();
     document.getElementById('ent-modal').addEventListener('click', closeManualEntModal);
     document.getElementById('unresolved-modal').addEventListener('click', closeUnresolvedModal);
+    document.getElementById('search-ent-modal').addEventListener('click', closeSearchEntModal);
+    document.getElementById('filter-ent-modal').addEventListener('click', closeFilterEntModal);
   });
 </script>
